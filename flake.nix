@@ -4,16 +4,21 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # https://nix-community.github.io/pyproject.nix/use-cases/pyproject.html
     pyproject-nix = {
-      url = "github:nix-community/pyproject.nix";
+      url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # https://adisbladis.github.io/uv2nix/usage/pyproject-build.html
     uv2nix = {
-      url = "github:adisbladis/uv2nix";
+      url = "github:pyproject-nix/uv2nix";
       inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -22,13 +27,14 @@
   # Users are expected to be able to contribute fixes.
   #
   # Note that uv2nix is _not_ using Nixpkgs buildPythonPackage.
-  # It's using https://nix-community.github.io/pyproject.nix/build.html
+  # It's using https://pyproject-nix.github.io/pyproject.nix/build.html
 
   outputs =
     {
       nixpkgs,
       uv2nix,
       pyproject-nix,
+      pyproject-build-systems,
       ...
     }:
     let
@@ -55,7 +61,7 @@
       # Uv2nix can only work with what it has, and uv.lock is missing essential metadata to perform some builds.
       # This is an additional overlay implementing build fixups.
       # See:
-      # - https://adisbladis.github.io/uv2nix/FAQ.html
+      # - https://pyproject-nix.github.io/uv2nix/FAQ.html
       pyprojectOverrides = _final: _prev: {
         # Implement build fixups here.
       };
@@ -72,14 +78,20 @@
         (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
         }).overrideScope
-          (lib.composeExtensions overlay pyprojectOverrides);
+          (
+            lib.composeManyExtensions [
+              pyproject-build-systems.overlays.default
+              overlay
+              pyprojectOverrides
+            ]
+          );
 
     in
     {
       # Package a virtual environment as our main application.
-      packages.x86_64-linux.default = pythonSet.mkVirtualEnv "numalgos" {
-        numalgos = [ ];
-      };
+      #
+      # Enable no optional dependencies for production build.
+      packages.x86_64-linux.default = pythonSet.mkVirtualEnv "numalgos-env" workspace.deps.default;
 
       # This example provides two different modes of development:
       # - Impurely using uv to manage virtual environments
@@ -91,9 +103,6 @@
           packages = [
             python
             pkgs.uv
-            pkgs.hello
-            pkgs.texliveFull
-            pkgs.pandoc
           ];
           shellHook = ''
             unset PYTHONPATH
@@ -111,26 +120,22 @@
               # Use environment variable
               root = "$REPO_ROOT";
               # Optional: Only enable editable for these packages
-              # members = [ "hello-world" ];
+              # members = [ "numalgos" ];
             };
 
             # Override previous set with our overrideable overlay.
             editablePythonSet = pythonSet.overrideScope editableOverlay;
 
-            # Build virtual environment
-            virtualenv = editablePythonSet.mkVirtualEnv "numalgos" {
-              # Add hello world with it's dev dependency group
-              numalgos = [  ];
-            };
+            # Build virtual environment, with local packages being editable.
+            #
+            # Enable all optional dependencies for development.
+            virtualenv = editablePythonSet.mkVirtualEnv "numalgos-dev-env" workspace.deps.all;
 
           in
           pkgs.mkShell {
             packages = [
               virtualenv
               pkgs.uv
-              pkgs.hello
-              pkgs.texliveFull
-              pkgs.pandoc
             ];
             shellHook = ''
               # Undo dependency propagation by nixpkgs.
