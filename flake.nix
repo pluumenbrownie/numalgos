@@ -103,6 +103,8 @@
           packages = [
             python
             pkgs.uv
+            pkgs.pandoc
+            pkgs.texliveFull
           ];
           shellHook = ''
             unset PYTHONPATH
@@ -136,6 +138,8 @@
             packages = [
               virtualenv
               pkgs.uv
+              pkgs.pandoc
+              pkgs.texliveFull
             ];
             shellHook = ''
               # Undo dependency propagation by nixpkgs.
