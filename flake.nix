@@ -91,7 +91,7 @@
       # Package a virtual environment as our main application.
       #
       # Enable no optional dependencies for production build.
-      packages.x86_64-linux.default = pythonSet.mkVirtualEnv "numalgos-env" workspace.deps.default;
+      packages.x86_64-linux.default = pythonSet.mkVirtualEnv "hello-world-env" workspace.deps.default;
 
       # This example provides two different modes of development:
       # - Impurely using uv to manage virtual environments
@@ -103,11 +103,10 @@
           packages = [
             python
             pkgs.uv
-            pkgs.pandoc
-            pkgs.texliveFull
           ];
           shellHook = ''
             unset PYTHONPATH
+            export UV_PYTHON_DOWNLOADS=never
           '';
         };
 
@@ -122,7 +121,7 @@
               # Use environment variable
               root = "$REPO_ROOT";
               # Optional: Only enable editable for these packages
-              # members = [ "numalgos" ];
+              # members = [ "hello-world" ];
             };
 
             # Override previous set with our overrideable overlay.
@@ -131,19 +130,24 @@
             # Build virtual environment, with local packages being editable.
             #
             # Enable all optional dependencies for development.
-            virtualenv = editablePythonSet.mkVirtualEnv "numalgos-dev-env" workspace.deps.all;
+            virtualenv = editablePythonSet.mkVirtualEnv "hello-world-dev-env" workspace.deps.all;
 
           in
           pkgs.mkShell {
             packages = [
               virtualenv
               pkgs.uv
-              pkgs.pandoc
-              pkgs.texliveFull
             ];
             shellHook = ''
               # Undo dependency propagation by nixpkgs.
               unset PYTHONPATH
+
+              # Don't create venv using uv
+              export UV_NO_SYNC=1
+
+              # Prevent uv from downloading managed Python's
+              export UV_PYTHON_DOWNLOADS=never
+
               # Get repository root using git. This is expanded at runtime by the editable `.pth` machinery.
               export REPO_ROOT=$(git rev-parse --show-toplevel)
             '';
